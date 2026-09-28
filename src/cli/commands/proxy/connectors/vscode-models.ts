@@ -36,6 +36,7 @@ const GPT_5_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const;
 const GPT_5_2_EFFORTS = ['none', 'low', 'medium', 'high'] as const;
 const GPT_5_XHIGH_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
 const GPT_5_6_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+const GPT_6_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 const GEMINI_FLASH_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const;
 const GEMINI_PRO_EFFORTS = ['low', 'medium', 'high'] as const;
 const CLAUDE_EFFORTS = ['low', 'medium', 'high'] as const;
@@ -175,7 +176,7 @@ export const VS_CODE_CAPABILITY_TABLE: readonly VsCodeCapabilityEntry[] = [
     vision: true,
     thinking: true,
     zeroDataRetentionEnabled: true,
-    supportsReasoningEffort: GPT_5_6_EFFORTS,
+    supportsReasoningEffort: GPT_6_EFFORTS,
     reasoningEffortFormat: 'responses',
     maxInputTokens: 922000,
     maxOutputTokens: 128000,
@@ -186,7 +187,7 @@ export const VS_CODE_CAPABILITY_TABLE: readonly VsCodeCapabilityEntry[] = [
     vision: true,
     thinking: true,
     zeroDataRetentionEnabled: true,
-    supportsReasoningEffort: GPT_5_6_EFFORTS,
+    supportsReasoningEffort: GPT_6_EFFORTS,
     reasoningEffortFormat: 'responses',
     maxInputTokens: 922000,
     maxOutputTokens: 128000,
