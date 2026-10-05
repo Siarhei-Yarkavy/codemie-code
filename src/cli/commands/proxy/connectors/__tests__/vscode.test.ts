@@ -28,6 +28,7 @@ const EXPECTED_MODEL_IDS = [
   'gpt-6-luna',
   'gpt-6-sol',
   'gpt-6-astra',
+  'gpt-6.1-sol',
   'gemini-3-flash',
   'gemini-3.1-pro',
   'gemini-3.5-flash',
@@ -186,6 +187,7 @@ describe('writeVsCodeLanguageModelsConfigAtPath', () => {
       ['gpt-6-luna', ['none', 'low', 'medium', 'high', 'xhigh', 'max']],
       ['gpt-6-sol', ['none', 'low', 'medium', 'high', 'xhigh', 'max']],
       ['gpt-6-astra', ['none', 'low', 'medium', 'high', 'xhigh', 'max']],
+      ['gpt-6.1-sol', ['none', 'low', 'medium', 'high', 'xhigh', 'max']],
     ]);
 
     for (const [id, efforts] of expectedEfforts) {
