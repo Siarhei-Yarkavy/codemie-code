@@ -347,6 +347,35 @@ export const OPENCODE_MODEL_CONFIGS: Record<string, OpenCodeModelConfig> = {
       output: 128000
     }
   },
+  'gpt-6-astra': {
+    id: 'gpt-6-astra',
+    name: 'GPT-6 Astra',
+    displayName: 'GPT-6 Astra',
+    family: 'gpt-6',
+    tool_call: true,
+    reasoning: true,
+    attachment: true,
+    temperature: false,
+    structured_output: true,
+    use_responses_api: true,
+    modalities: {
+      input: ['text', 'image'],
+      output: ['text']
+    },
+    knowledge: '2026-05-18',
+    release_date: '2026-09-22',
+    last_updated: '2026-09-22',
+    open_weights: false,
+    cost: {
+      input: 10,
+      output: 50,
+      cache_read: 1
+    },
+    limit: {
+      context: 1050000,
+      output: 128000
+    }
+  },
 
   // ── Claude Models ──────────────────────────────────────────────────
   'claude-4-5-sonnet': {

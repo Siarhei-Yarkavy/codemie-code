@@ -193,6 +193,17 @@ export const VS_CODE_CAPABILITY_TABLE: readonly VsCodeCapabilityEntry[] = [
     maxOutputTokens: 128000,
   },
   {
+    family: 'gpt-6-astra',
+    apiType: 'responses',
+    vision: true,
+    thinking: true,
+    zeroDataRetentionEnabled: true,
+    supportsReasoningEffort: GPT_6_EFFORTS,
+    reasoningEffortFormat: 'responses',
+    maxInputTokens: 922000,
+    maxOutputTokens: 128000,
+  },
+  {
     family: 'gemini-3-flash',
     apiType: 'chat-completions',
     vision: true,
