@@ -398,7 +398,7 @@ export const OPENCODE_MODEL_CONFIGS: Record<string, OpenCodeModelConfig> = {
     cost: {
       input: 2,
       output: 10,
-      cache_read: 0.20
+      cache_read: 0.1
     },
     limit: {
       context: 1050000,
