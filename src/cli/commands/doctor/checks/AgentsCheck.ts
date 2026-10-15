@@ -27,11 +27,23 @@ export class AgentsCheck implements ItemWiseHealthCheck {
       if (method === 'npm') {
         return {
           status: 'warn',
-          message: `${agent.displayName}${versionStr} - installed via npm (deprecated, use: codemie install claude --supported)`
+          message: `${agent.displayName}${versionStr} - installed via npm (deprecated, use: codemie install ${agent.name} --supported)`
         };
       }
     }
     return null;
+  }
+
+  /**
+   * Render the recommended version for a human.
+   *
+   * `metadata.supportedVersion` accepts the channel names 'latest' and 'stable'
+   * alongside semantic versions (types.ts). Prefixing those with `v` produced
+   * "vlatest", which names no version at all, so channels are spelled out
+   * instead.
+   */
+  private static formatRecommended(supportedVersion: string): string {
+    return /^\d/.test(supportedVersion) ? `v${supportedVersion}` : `the ${supportedVersion} channel`;
   }
 
   private async buildDetail(agent: AgentAdapter): Promise<HealthCheckDetail> {
@@ -49,19 +61,34 @@ export class AgentsCheck implements ItemWiseHealthCheck {
 
     const compat = await agent.checkVersionCompatibility();
 
+    // `--supported` resolves through metadata.supportedVersion and throws when
+    // the agent pins none, so the hint is only offered where the command works.
+    const upgradeHint = compat.hasPinnedVersion
+      ? `codemie install ${agent.name} --supported`
+      : undefined;
+
     if (compat.isBelowMinimum) {
       return {
         status: 'error',
         message: `${agent.displayName}${versionStr} - below minimum supported v${compat.minimumSupportedVersion}`,
-        hint: `codemie install ${agent.name} --supported`
+        ...(upgradeHint && { hint: upgradeHint })
       };
+    }
+
+    if (!compat.hasPinnedVersion) {
+      // Nothing to recommend: the agent resolves its own behaviour from the
+      // installed binary at runtime (OpenCode autodetects its v1/v2 config
+      // schema), so there is no pinned version to compare against or advertise.
+      // Reporting the 'latest' placeholder here is what produced the bogus
+      // "recommends vlatest" warning.
+      return { status: 'ok', message: `${agent.displayName}${versionStr}` };
     }
 
     if (version !== compat.supportedVersion) {
       return {
         status: 'warn',
-        message: `${agent.displayName}${versionStr} - CodeMie recommends v${compat.supportedVersion}`,
-        hint: `codemie install ${agent.name} --supported`
+        message: `${agent.displayName}${versionStr} - CodeMie recommends ${AgentsCheck.formatRecommended(compat.supportedVersion)}`,
+        ...(upgradeHint && { hint: upgradeHint })
       };
     }
 

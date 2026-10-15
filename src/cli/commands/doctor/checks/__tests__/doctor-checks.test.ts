@@ -322,6 +322,111 @@ describe('AgentsCheck', () => {
     expect(displayed).toEqual([{ status: 'ok', message: 'Gemini (2.0.0)' }]);
     expect(result.details).toHaveLength(1);
   });
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // Regression coverage for the "CodeMie recommends vlatest" warning.
+  //
+  // OpenCode pins no supportedVersion — it autodetects its v1/v2 config schema
+  // from the binary at runtime. The check used to advertise the 'latest'
+  // placeholder as if it were a version ("vlatest") and to recommend
+  // `--supported`, which throws for an agent that pins no version.
+  describe('version policy reporting', () => {
+    const compat = (over: Record<string, unknown> = {}) => ({
+      compatible: true,
+      installedVersion: '2.0.28',
+      supportedVersion: 'latest',
+      hasPinnedVersion: false,
+      isNewer: false,
+      hasUpdate: false,
+      isBelowMinimum: false,
+      ...over,
+    });
+
+    it('does not warn about an unpinned agent and invents no version', async () => {
+      h.getInstalledAgentsMock.mockResolvedValue([
+        {
+          name: 'opencode',
+          displayName: 'OpenCode CLI',
+          getVersion: async () => '2.0.28',
+          checkVersionCompatibility: async () => compat(),
+        },
+      ]);
+
+      const result = await new AgentsCheck().run();
+
+      expect(result.success).toBe(true);
+      expect(result.details[0]).toEqual({ status: 'ok', message: 'OpenCode CLI (2.0.28)' });
+      // Never "recommends vlatest", never a hint whose command cannot succeed.
+      expect(result.details[0].message).not.toContain('vlatest');
+      expect(result.details[0].message).not.toContain('recommends');
+      expect(result.details[0].hint).toBeUndefined();
+    });
+
+    it('still errors for an unpinned agent below its declared minimum', async () => {
+      h.getInstalledAgentsMock.mockResolvedValue([
+        {
+          name: 'opencode',
+          displayName: 'OpenCode CLI',
+          getVersion: async () => '1.0.0',
+          checkVersionCompatibility: async () =>
+            compat({
+              compatible: false,
+              installedVersion: '1.0.0',
+              minimumSupportedVersion: '2.0.0',
+              isBelowMinimum: true,
+            }),
+        },
+      ]);
+
+      const result = await new AgentsCheck().run();
+
+      expect(result.success).toBe(false);
+      expect(result.details[0].status).toBe('error');
+      expect(result.details[0].message).toContain('below minimum supported v2.0.0');
+      // `--supported` resolves through supportedVersion and throws when unpinned.
+      expect(result.details[0].hint).toBeUndefined();
+    });
+
+    it('keeps the recommendation and hint for a pinned agent', async () => {
+      h.getInstalledAgentsMock.mockResolvedValue([
+        {
+          name: 'claude',
+          displayName: 'Claude Code',
+          getVersion: async () => '1.0.0',
+          checkVersionCompatibility: async () =>
+            compat({
+              supportedVersion: '1.2.3',
+              hasPinnedVersion: true,
+              isBelowMinimum: false,
+              installedVersion: '1.0.0',
+            }),
+        },
+      ]);
+
+      const result = await new AgentsCheck().run();
+
+      expect(result.details[0].status).toBe('warn');
+      expect(result.details[0].message).toContain('CodeMie recommends v1.2.3');
+      expect(result.details[0].hint).toBe('codemie install claude --supported');
+    });
+
+    it('spells a channel recommendation as a channel, never as "vlatest"', async () => {
+      h.getInstalledAgentsMock.mockResolvedValue([
+        {
+          name: 'claude',
+          displayName: 'Claude Code',
+          getVersion: async () => '1.0.0',
+          checkVersionCompatibility: async () =>
+            compat({ supportedVersion: 'latest', hasPinnedVersion: true, installedVersion: '1.0.0' }),
+        },
+      ]);
+
+      const result = await new AgentsCheck().run();
+
+      expect(result.details[0].message).toContain('CodeMie recommends the latest channel');
+      expect(result.details[0].message).not.toContain('vlatest');
+    });
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────────────

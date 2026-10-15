@@ -687,3 +687,121 @@ describe('BaseAgentAdapter', () => {
     });
   });
 });
+
+/**
+ * Version-policy contract.
+ *
+ * `supportedVersion` is a recommendation; `minimumSupportedVersion` is the only
+ * hard gate. They are independent: an agent that pins no recommendation (OpenCode
+ * autodetects its schema at runtime) must still be held to a declared minimum,
+ * and must never be reported as having a recommendation to follow.
+ */
+class VersionAdapter extends BaseAgentAdapter {
+  constructor(metadata: AgentMetadata, private readonly version: string | null) {
+    super(metadata);
+  }
+  async getVersion(): Promise<string | null> {
+    return this.version;
+  }
+  async run(): Promise<void> {
+    // Not exercised by these tests.
+  }
+}
+
+const baseMetadata = (overrides: Partial<AgentMetadata> = {}): AgentMetadata => ({
+  name: 'test',
+  displayName: 'Test Agent',
+  description: 'Test agent for unit testing',
+  npmPackage: null,
+  cliCommand: null,
+  envMapping: {},
+  supportedProviders: ['openai'],
+  silentMode: false,
+  ...overrides,
+});
+
+describe('checkVersionCompatibility', () => {
+  it('reports hasPinnedVersion true for a pinned agent', async () => {
+    const adapter = new VersionAdapter(baseMetadata({ supportedVersion: '1.2.3' }), '1.2.3');
+
+    const compat = await adapter.checkVersionCompatibility();
+
+    expect(compat.hasPinnedVersion).toBe(true);
+    expect(compat.supportedVersion).toBe('1.2.3');
+    expect(compat.isBelowMinimum).toBe(false);
+  });
+
+  it('reports hasPinnedVersion false and no comparison for an unpinned agent', async () => {
+    const adapter = new VersionAdapter(baseMetadata(), '2.0.28');
+
+    const compat = await adapter.checkVersionCompatibility();
+
+    // OpenCode ships no supportedVersion on purpose; the result must not invent
+    // one. Formatting this placeholder as a version is what printed "vlatest".
+    expect(compat.hasPinnedVersion).toBe(false);
+    expect(compat.isNewer).toBe(false);
+    expect(compat.hasUpdate).toBe(false);
+    expect(compat.isBelowMinimum).toBe(false);
+    expect(compat.compatible).toBe(true);
+  });
+
+  it('still reports hasPinnedVersion false when the agent is not installed', async () => {
+    const adapter = new VersionAdapter(baseMetadata(), null);
+
+    const compat = await adapter.checkVersionCompatibility();
+
+    expect(compat.hasPinnedVersion).toBe(false);
+    expect(compat.installedVersion).toBeNull();
+    expect(compat.compatible).toBe(false);
+  });
+
+  it('enforces minimumSupportedVersion for an unpinned agent (regression: the early return skipped it)', async () => {
+    const adapter = new VersionAdapter(
+      baseMetadata({ minimumSupportedVersion: '2.0.0' }),
+      '1.9.9',
+    );
+
+    const compat = await adapter.checkVersionCompatibility();
+
+    expect(compat.hasPinnedVersion).toBe(false);
+    expect(compat.isBelowMinimum).toBe(true);
+    expect(compat.compatible).toBe(false);
+  });
+
+  it('passes an unpinned agent at or above its declared minimum', async () => {
+    const adapter = new VersionAdapter(
+      baseMetadata({ minimumSupportedVersion: '2.0.0' }),
+      '2.0.28',
+    );
+
+    const compat = await adapter.checkVersionCompatibility();
+
+    expect(compat.isBelowMinimum).toBe(false);
+    expect(compat.compatible).toBe(true);
+  });
+
+  it('fails open when the minimum comparison cannot parse a non-standard version', async () => {
+    const adapter = new VersionAdapter(
+      baseMetadata({ minimumSupportedVersion: '2.0.0' }),
+      'v2-beta-build',
+    );
+
+    const compat = await adapter.checkVersionCompatibility();
+
+    // A parse failure is not evidence of being below the minimum.
+    expect(compat.isBelowMinimum).toBe(false);
+    expect(compat.compatible).toBe(true);
+  });
+
+  it('detects below-minimum for a pinned agent', async () => {
+    const adapter = new VersionAdapter(
+      baseMetadata({ supportedVersion: '1.5.0', minimumSupportedVersion: '1.3.0' }),
+      '1.2.9',
+    );
+
+    const compat = await adapter.checkVersionCompatibility();
+
+    expect(compat.hasPinnedVersion).toBe(true);
+    expect(compat.isBelowMinimum).toBe(true);
+  });
+});

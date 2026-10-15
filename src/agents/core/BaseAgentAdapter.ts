@@ -285,6 +285,7 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
    * @returns Version compatibility result with status and version info
    */
   async checkVersionCompatibility(): Promise<VersionCompatibilityResult> {
+    const hasPinnedVersion = Boolean(this.metadata.supportedVersion);
     const supportedVersion = this.metadata.supportedVersion || 'latest';
     const minimumSupportedVersion = this.metadata.minimumSupportedVersion;
 
@@ -294,6 +295,7 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
       agent: this.metadata.name,
       installedVersion,
       supportedVersion,
+      hasPinnedVersion,
       minimumSupportedVersion,
     });
 
@@ -302,6 +304,7 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
         compatible: false,
         installedVersion: null,
         supportedVersion,
+        hasPinnedVersion,
         isNewer: false,
         hasUpdate: false,
         isBelowMinimum: false,
@@ -309,14 +312,37 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
       };
     }
 
-    if (!this.metadata.supportedVersion) {
+    if (!hasPinnedVersion) {
+      // No pinned recommendation means no comparison to make — but the minimum
+      // gate is version policy in its own right (types.ts: minimumSupportedVersion
+      // marks known protocol breaks), so it is evaluated here rather than skipped.
+      // The old early return short-circuited before it, which silently disabled the
+      // one hard gate for every unpinned agent.
+      let isBelowMinimum = false;
+      if (minimumSupportedVersion) {
+        try {
+          isBelowMinimum = compareVersions(installedVersion, minimumSupportedVersion) < 0;
+        } catch (error) {
+          // Fail open: an unparsable installed version is not evidence that the
+          // agent is below the minimum, and blocking startup on a parse failure
+          // would be worse than the warning this check would otherwise produce.
+          logger.warn('Version comparison against minimum failed, treating as supported', {
+            agent: this.metadata.name,
+            installedVersion,
+            minimumSupportedVersion,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
       return {
-        compatible: true,
+        compatible: !isBelowMinimum,
         installedVersion,
         supportedVersion: 'latest',
+        hasPinnedVersion: false,
         isNewer: false,
         hasUpdate: false,
-        isBelowMinimum: false,
+        isBelowMinimum,
         minimumSupportedVersion,
       };
     }
@@ -347,6 +373,7 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
         compatible: comparison <= 0,
         installedVersion,
         supportedVersion,
+        hasPinnedVersion: true,
         isNewer: comparison > 0,
         hasUpdate,
         isBelowMinimum,
@@ -379,6 +406,7 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
         compatible: false,
         installedVersion,
         supportedVersion,
+        hasPinnedVersion: true,
         isNewer: false,
         hasUpdate: false,
         isBelowMinimum: false,
@@ -473,7 +501,9 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
    * a recommendation handled by {@link warnOnceIfUntested}.
    */
   private async blockIfBelowMinimum(): Promise<void> {
-    if (!this.metadata.supportedVersion || !this.metadata.minimumSupportedVersion) {
+    // Gated on minimumSupportedVersion alone: requiring a pinned
+    // supportedVersion here disabled the hard gate for every unpinned agent.
+    if (!this.metadata.minimumSupportedVersion) {
       return;
     }
 
@@ -484,9 +514,14 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
 
     const installedDisplay = compat.installedVersion ?? 'unknown';
     const minimumDisplay = compat.minimumSupportedVersion ?? 'unknown';
+    // `--supported` resolves through metadata.supportedVersion and throws when
+    // the agent pins none, so it is only offered where it actually works.
+    const upgradeCommand = compat.hasPinnedVersion
+      ? `codemie install ${this.name} --supported`
+      : `codemie install ${this.name}`;
     const message =
       `${this.displayName} v${installedDisplay} is below the minimum supported version ` +
-      `v${minimumDisplay}. Run: codemie install ${this.name} --supported`;
+      `v${minimumDisplay}. Run: ${upgradeCommand}`;
 
     if (this.metadata.silentMode) {
       // In silent/ACP mode stdout is a JSON-RPC stream — never write prose to it.
@@ -503,14 +538,18 @@ export abstract class BaseAgentAdapter implements AgentAdapter {
     console.error();
     console.error(chalk.red(`✗ ${this.displayName} v${installedDisplay} is no longer supported`));
     console.error(chalk.red(`  Minimum required version: v${minimumDisplay}`));
-    console.error(
-      chalk.white(`  Recommended version:      v${compat.supportedVersion} `) +
-      chalk.green('(recommended)')
-    );
+    // Omitted when unpinned: there is no recommended version to name, and
+    // formatting the 'latest' placeholder as a version yields "vlatest".
+    if (compat.hasPinnedVersion) {
+      console.error(
+        chalk.white(`  Recommended version:      v${compat.supportedVersion} `) +
+        chalk.green('(recommended)')
+      );
+    }
     console.error();
     console.error(chalk.white('  This version is known to be incompatible with CodeMie.'));
     console.error(chalk.white('  Upgrade with:'));
-    console.error(chalk.blueBright(`     codemie install ${this.name} --supported`));
+    console.error(chalk.blueBright(`     ${upgradeCommand}`));
     console.error();
     process.exit(1);
   }

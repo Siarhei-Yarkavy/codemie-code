@@ -198,11 +198,23 @@ export interface AgentAnalyticsAdapter {
 export interface VersionCompatibilityResult {
   compatible: boolean;              // true if installed version is compatible
   installedVersion: string | null;  // null if not installed
-  supportedVersion: string;         // version from metadata
+  supportedVersion: string;         // version from metadata, or the 'latest' channel when unpinned
   isNewer: boolean;                 // true if installed > supported (one-time notice)
   hasUpdate: boolean;               // true if newer supported version available (one-time notice)
   isBelowMinimum: boolean;          // true if installed < minimumSupportedVersion (blocks startup)
   minimumSupportedVersion?: string; // minimum version required to run (from metadata)
+
+  /**
+   * false when the agent pins no `metadata.supportedVersion`: there is no
+   * recommended version to compare against or advertise. Such agents pick their
+   * behaviour from the binary at runtime (OpenCode autodetects its v1/v2 config
+   * schema), so a comparison against an invented version is meaningless.
+   *
+   * Callers must branch on this instead of reading `supportedVersion`: an unpinned
+   * agent reports the 'latest' channel there as a placeholder, and formatting it
+   * as a version produces strings like "vlatest".
+   */
+  hasPinnedVersion: boolean;
 }
 
 /**
